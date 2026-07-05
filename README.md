@@ -180,4 +180,4 @@ for r in results:
 
 ## 🙋 Author
 
-Built by **Singaram Hemalatha** — Coding Blocks Internship, Project 2.
+Built by Utkarsh Sehrawat — Coding Blocks Internship, Project 2.
