@@ -1,183 +1,204 @@
-# 📚 AI Research Paper Intelligence System
+# AI Research Paper Intelligence System
 
-A semantic search engine for Machine Learning research papers that goes beyond keyword matching — it understands the **meaning** of a query, retrieves the most relevant papers from a corpus of 50,000 ArXiv abstracts, then automatically **summarizes** each result and **extracts key topics**, so you can scan a paper's relevance in seconds instead of reading the full abstract.
+An AI-powered research assistant for discovering and understanding machine-learning papers. The system combines semantic search, FAISS vector retrieval, local NLP models, and an optional Groq-powered RAG assistant in a Streamlit application.
 
-Built as part of the Coding Blocks Internship program.
+## What the project does
 
----
+The application supports two modes:
 
-## 🎯 What it does
+### Local semantic search
 
-Type a natural-language research query like:
+1. Converts paper titles and abstracts into 384-dimensional embeddings.
+2. Stores the embeddings in a FAISS index.
+3. Converts a user's query into an embedding.
+4. Retrieves the most semantically similar papers.
+5. Summarizes results with DistilBART.
+6. Extracts key phrases with KeyBERT.
 
-> "deep learning for medical image analysis"
+This mode works without an API key.
 
-...and the system:
+### Groq RAG assistant
 
-1. **Understands intent** — converts the query into a 384-dimensional semantic vector
-2. **Searches by meaning, not keywords** — retrieves the top-k most similar papers using cosine similarity over a FAISS vector index
-3. **Summarizes** — condenses each returned abstract into a short, readable summary using a BART-based transformer
-4. **Extracts key phrases** — pulls out the core topics/keywords from each paper using KeyBERT
+When `GROQ_API_KEY` is configured, the application can retrieve relevant papers and provide their abstracts as context to a Groq language model. It supports:
 
-All of this is wrapped in a clean, interactive **Streamlit** web app.
+- Research questions over retrieved papers
+- Topic and keyword questions
+- Paper comparison questions
+- Source-paper display alongside the generated answer
 
----
+The RAG mode uses LangChain prompt composition and deterministic routing so that comparison questions are handled differently from ordinary search questions.
 
-## 🧠 How it works (architecture)
+## Architecture
 
-```
-                     ┌─────────────────────────┐
-                     │   ArXiv ML Papers (HF)   │
-                     │  ~50,000 title+abstract  │
-                     └────────────┬─────────────┘
-                                  │  clean & merge
-                                  ▼
-                     ┌─────────────────────────┐
-                     │   Sentence-Transformer   │
-                     │    (all-MiniLM-L6-v2)    │
-                     │   text --> 384-dim vec   │
-                     └────────────┬─────────────┘
-                                  │
-                                  ▼
-                     ┌─────────────────────────┐
-                     │      FAISS Index         │
-                     │  (Inner Product / cosine)│
-                     └────────────┬─────────────┘
-                                  │
-        user query ──encode──────┘
-                                  │
-                                  ▼
-                     ┌─────────────────────────┐
-                     │   Top-K similar papers   │
-                     └────────────┬─────────────┘
-                                  │
-                     ┌────────────┴─────────────┐
-                     ▼                           ▼
-          ┌────────────────────┐     ┌────────────────────┐
-          │   BART Summarizer   │     │   KeyBERT Keywords  │
-          │ (distilbart-cnn-12) │     │  (n-gram phrases)   │
-          └────────────────────┘     └────────────────────┘
-                     │                           │
-                     └────────────┬──────────────┘
-                                  ▼
-                     ┌─────────────────────────┐
-                     │      Streamlit UI        │
-                     └─────────────────────────┘
+```text
+ArXiv ML papers
+      |
+      v
+Data cleaning and title + abstract combination
+      |
+      v
+Sentence Transformer embeddings
+      |
+      v
+Normalized FAISS inner-product index
+      |
+      +----------------------+
+      |                      |
+      v                      v
+Local semantic search        Groq RAG assistant
+      |                      |
+      v                      v
+BART summaries + KeyBERT    Retrieved context + Groq answer
+      \                      /
+       v                    v
+              Streamlit UI
 ```
 
----
+## Technology stack
 
-## 🛠️ Tech Stack
+- Python
+- Streamlit
+- Pandas and NumPy
+- Hugging Face Datasets
+- Sentence Transformers: `all-MiniLM-L6-v2`
+- FAISS for vector similarity search
+- Transformers: `distilbart-cnn-12-6`
+- KeyBERT for keyword extraction
+- LangChain Core for RAG prompt composition
+- Groq API for optional cloud LLM generation
 
-| Layer | Tool |
-|---|---|
-| Dataset | [CShorten/ML-ArXiv-Papers](https://huggingface.co/datasets/CShorten/ML-ArXiv-Papers) (Hugging Face) |
-| Embeddings | `sentence-transformers` — `all-MiniLM-L6-v2` (384-dim) |
-| Vector Search | `faiss-cpu` — `IndexFlatIP` (cosine similarity via L2-normalized inner product) |
-| Summarization | `transformers` — `sshleifer/distilbart-cnn-12-6` |
-| Keyword Extraction | `keybert` |
-| Data handling | `pandas`, `numpy` |
-| Web App | `streamlit` |
+## Project structure
 
----
-
-## 📂 Project Structure
-
-```
-AI-Research-Paper-Intelligence-System/
+```text
+AI-Research-Intelligence-System/
 ├── README.md
 ├── requirements.txt
+├── .env.example
 ├── .gitignore
 ├── data/
-│   └── README.md              # explains how generated data/embeddings/index are created
-├── notebooks/
-│   ├── 01_EDA_and_Embeddings.ipynb   # data exploration + embedding generation walkthrough
-│   └── 02_Search_Engine.ipynb        # FAISS search + summarization + keyword extraction walkthrough
+│   ├── README.md
+│   ├── cleaned_arxiv_papers.csv       # generated locally
+│   ├── arxiv_embeddings.npy           # generated locally
+│   └── paper_faiss.index               # generated locally
 └── src/
-    ├── data_prep.py            # load & clean the raw dataset
-    ├── build_index.py          # generate embeddings + build the FAISS index
-    ├── search_engine.py        # PaperSearchEngine class: search, summarize, extract keywords
-    └── app.py                  # Streamlit web app
+    ├── app.py                          # Streamlit interface
+    ├── data_prep.py                    # dataset download and cleaning
+    ├── build_index.py                  # embeddings and FAISS index
+    ├── search_engine.py                # local search, summaries, keywords
+    └── rag_agent.py                    # optional Groq RAG assistant
 ```
 
-The `notebooks/` walk through the reasoning behind every step (useful for
-understanding or presenting the project). The `src/` folder holds the same
-logic refactored into clean, reusable, production-style modules that power
-the actual app.
+## Setup on macOS or Linux
 
----
-
-## 🚀 Getting Started
-
-### 1. Install dependencies
+From the project directory:
 
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install "pip==24.3.1"
+python -m pip install -r requirements.txt
 ```
 
-### 2. Build the search index (one-time setup)
+The project currently supports Python 3.9+, although Python 3.11 is recommended for a more modern scientific-Python environment.
 
-This downloads the dataset, generates embeddings for ~50,000 papers, and
-builds the FAISS index. It's compute-heavy (~20-30 min on CPU) but only
-needs to run once — results are cached in `data/`.
+## Prepare the data and index
+
+The first setup downloads the public Hugging Face dataset and generates embeddings for up to 50,000 papers:
 
 ```bash
-python src/data_prep.py
-python src/build_index.py
+python -m src.data_prep
+python -m src.build_index
 ```
 
-### 3. Launch the app
+This can take a while on a CPU. The generated files are cached under `data/` and are excluded from Git because they are large.
+
+On some macOS Python 3.9 installations, limit native CPU threading before indexing or launching the app:
+
+```bash
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export TOKENIZERS_PARALLELISM=false
+```
+
+## Configure Groq RAG mode
+
+Local search does not require an API key. To use the RAG assistant:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
+GROQ_API_KEY=your_actual_groq_api_key
+GROQ_MODEL=openai/gpt-oss-20b
+```
+
+Never commit `.env` or share the key. `.env` is excluded by `.gitignore`.
+
+## Run the application
 
 ```bash
 streamlit run src/app.py
 ```
 
-Open the local URL Streamlit prints (usually `http://localhost:8501`) and
-start searching.
+Open `http://localhost:8501` in a browser.
 
-### Or use it from Python directly
+For local search, enter a query and click **Search**. For RAG mode, enable **Groq RAG assistant**, enter a question, and click **Ask RAG assistant**.
 
-```python
-from src.search_engine import PaperSearchEngine
+Example questions:
 
-engine = PaperSearchEngine()
-results = engine.full_report("deep learning for medical image analysis", k=5)
-
-for r in results:
-    print(r["title"], "-", r["score"])
-    print(r["summary"])
-    print(r["keywords"])
+```text
+deep learning for medical image analysis
 ```
 
----
+```text
+Compare Vision Transformers with CNN architectures.
+```
 
-## 💡 Key Design Decisions
+```text
+What are the main topics in papers about reinforcement learning?
+```
 
-- **Why FAISS `IndexFlatIP` instead of a database?** For 50k papers, an
-  exact (non-approximate) flat index is fast enough and guarantees perfect
-  recall — no accuracy trade-off from approximate search.
-- **Why normalize embeddings before indexing?** Cosine similarity depends
-  only on vector *direction*, not magnitude. Normalizing every vector to
-  unit length lets us use FAISS's fast Inner Product search to get
-  mathematically identical results to cosine similarity.
-- **Why `all-MiniLM-L6-v2`?** A strong balance of speed and semantic
-  quality — 384 dimensions is small enough to index and query instantly,
-  while still capturing rich sentence-level meaning.
-- **Why cache embeddings/index to disk?** Re-encoding 50,000 papers takes
-  ~20-30 minutes; caching means the app starts in seconds on every
-  subsequent run.
+## How retrieval works
 
----
+Each paper is represented by a normalized embedding. The query is embedded using the same model. FAISS uses inner-product search; because the vectors are L2-normalized, inner product is equivalent to cosine similarity.
 
-## 🔮 Possible Extensions
+The application retrieves the top-k papers and uses their titles and abstracts as the evidence for summaries or RAG responses.
 
-- Swap `IndexFlatIP` for `IndexIVFFlat` / `IndexHNSW` to scale to millions of papers
-- Add filters (year, category) alongside semantic search
-- Deploy the Streamlit app publicly (Streamlit Community Cloud / HF Spaces)
-- Add a citation graph / "papers similar to this one" feature
+## Limitations
 
----
+- The dataset is a snapshot and does not automatically include new papers.
+- Summaries and LLM answers can contain mistakes; the original abstracts should be checked.
+- RAG quality depends on retrieval quality and Groq availability.
+- Exact `IndexFlatIP` search is suitable for this corpus but may not scale to millions of papers.
+- Generated data files are not included in GitHub and must be regenerated on another machine.
 
-## 🙋 Author
+## Future improvements
 
-Built by Utkarsh Sehrawat — Coding Blocks Internship, Project 2.
+- Add publication-year and category filters.
+- Add ArXiv links, authors, and citation metadata.
+- Add hybrid BM25 + vector retrieval.
+- Add cross-encoder reranking.
+- Add PDF upload and analysis.
+- Add evaluation metrics such as Precision@k and Recall@k.
+- Deploy the Streamlit app.
+
+## GitHub safety
+
+Before committing, verify that `.env`, `.venv/`, and generated data files are not staged:
+
+```bash
+git status
+```
+
+Commit the README and source changes with:
+
+```bash
+git add README.md src requirements.txt .env.example .gitignore
+git commit -m "Document advanced research paper RAG system"
+git push origin main
+```
+
