@@ -9,6 +9,7 @@ Run with:
 
 import streamlit as st
 from search_engine import PaperSearchEngine
+from rag_agent import ResearchRAGAssistant
 
 st.set_page_config(
     page_title="AI Research Paper Intelligence System",
@@ -36,6 +37,7 @@ with st.sidebar:
     top_k = st.slider("Number of results", min_value=1, max_value=10, value=5)
     show_summary = st.checkbox("Generate AI summary", value=True)
     show_keywords = st.checkbox("Extract keywords", value=True)
+    rag_mode = st.checkbox("Enable Groq RAG assistant", value=False)
     st.markdown("---")
     st.markdown(
         "**How it works**\n\n"
@@ -44,6 +46,8 @@ with st.sidebar:
         "3. BART summarizes each abstract\n"
         "4. KeyBERT extracts the key phrases"
     )
+    if rag_mode:
+        st.caption("RAG mode requires GROQ_API_KEY in a local .env file.")
 
 query = st.text_input(
     "🔍 Search research papers",
@@ -51,6 +55,29 @@ query = st.text_input(
 )
 
 search_clicked = st.button("Search", type="primary")
+
+rag_query = st.text_area(
+    "🤖 Ask the research assistant (optional)",
+    placeholder="e.g. Compare Vision Transformers with CNNs using the retrieved papers.",
+    disabled=not rag_mode,
+)
+rag_clicked = st.button("Ask RAG assistant", disabled=not rag_mode)
+
+if rag_clicked and rag_query.strip():
+    engine = get_engine()
+    try:
+        assistant = ResearchRAGAssistant(engine)
+        with st.spinner("Retrieving papers and generating a grounded answer..."):
+            report = assistant.answer(rag_query, k=top_k)
+        st.subheader(f"RAG response ({report['mode']})")
+        st.write(report["answer"])
+        with st.expander("Retrieved source papers"):
+            for source in report["sources"]:
+                st.markdown(f"**{source['title']}** — similarity {source['score']:.3f}")
+    except RuntimeError as error:
+        st.error(str(error))
+    except Exception as error:
+        st.error(f"RAG request failed: {error}")
 
 if search_clicked and query.strip():
     engine = get_engine()

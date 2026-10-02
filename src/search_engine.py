@@ -15,12 +15,28 @@ Usage:
 """
 
 import os
+
+# Prevent a known macOS/Python 3.9 OpenMP crash when PyTorch and OpenBLAS
+# create competing worker pools during model loading or inference.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 import pandas as pd
 import numpy as np
 import faiss
+import torch
 from sentence_transformers import SentenceTransformer
 from transformers import pipeline
 from keybert import KeyBERT
+
+try:
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
+except RuntimeError:
+    # These settings can only be changed before parallel work starts.
+    pass
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 CLEANED_CSV_PATH = os.path.join(DATA_DIR, "cleaned_arxiv_papers.csv")
